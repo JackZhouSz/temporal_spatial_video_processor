@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D08_book_colorchart_L3
+
+input:
+  file_path: './data/D08_book_colorchart_L3/D08_book_colorchart_L3.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D08_book_colorchart_L3/denoised_video.h5'
+  cache_dir: './output/D08_book_colorchart_L3/cache'
+
+temporal_transform:
+  num_levels: 6

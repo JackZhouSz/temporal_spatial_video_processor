@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D02_plain_wall
+
+input:
+  file_path: './data/D02_plain_wall/D02_plain_wall.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D02_plain_wall/denoised_video.h5'
+  cache_dir: './output/D02_plain_wall/cache'
+
+temporal_transform:
+  num_levels: 6

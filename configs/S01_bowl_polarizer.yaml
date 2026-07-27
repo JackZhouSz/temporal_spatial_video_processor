@@ -1,0 +1,16 @@
+extends: default_config.yaml
+
+scene_name: S01_bowl_polarizer
+
+input:
+  file_path: './data/S01_bowl_polarizer/S01_bowl_polarizer.npz.zst'
+  video_key: 'raw_thr_frames'
+  tstamps_key: 'raw_thr_tstamps'
+  end_idx: 1152
+
+output:
+  file_path: './output/S01_bowl_polarizer/denoised_video.h5'
+  cache_dir: './output/S01_bowl_polarizer/cache'
+
+temporal_transform:
+  num_levels: 6

@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D09_cardboard_fan_L0
+
+input:
+  file_path: './data/D09_cardboard_fan_L0/D09_cardboard_fan_L0.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D09_cardboard_fan_L0/denoised_video.h5'
+  cache_dir: './output/D09_cardboard_fan_L0/cache'
+
+temporal_transform:
+  num_levels: 6

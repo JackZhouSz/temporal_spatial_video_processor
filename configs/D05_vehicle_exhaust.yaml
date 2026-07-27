@@ -1,0 +1,28 @@
+extends: default_config.yaml
+
+scene_name: D05_vehicle_exhaust
+
+input:
+  file_path: './data/D05_vehicle_exhaust/D05_vehicle_exhaust.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D05_vehicle_exhaust/denoised_video.h5'
+  cache_dir: './output/D05_vehicle_exhaust/cache'
+
+temporal_transform:
+  num_levels: 6
+
+spatial_processing:
+  approx:
+    pass1_smooth_chain:
+      - {axis_nlm_destripe: {patch_size: 7, patch_distance: 11, h: null}}
+      - {bm3d: {noise_sigma_multiplier: 1.0}}
+    pass2_smooth_chain:
+      - {axis_nlm_destripe: {patch_size: 7, patch_distance: 11, h: null}}
+      - {bm3d: {noise_sigma_multiplier: 1.5}}
+  
+  detail:
+    smooth_chain:
+      - {axis_nlm_destripe_complex: {patch_size: 7, patch_distance: 11, h: null}}
+      - {bm3d: {noise_sigma_multiplier: 1.5}}

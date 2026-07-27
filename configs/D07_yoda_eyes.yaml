@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D07_yoda_eyes
+
+input:
+  file_path: './data/D07_yoda_eyes/D07_yoda_eyes.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D07_yoda_eyes/denoised_video.h5'
+  cache_dir: './output/D07_yoda_eyes/cache'
+
+temporal_transform:
+  num_levels: 6

@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D04_bunny_light_left
+
+input:
+  file_path: './data/D04_bunny_light_left/D04_bunny_light_left.npz.zst'
+  end_idx: 1152
+
+output:
+  file_path: './output/D04_bunny_light_left/denoised_video.h5'
+  cache_dir: './output/D04_bunny_light_left/cache'
+
+temporal_transform:
+  num_levels: 6

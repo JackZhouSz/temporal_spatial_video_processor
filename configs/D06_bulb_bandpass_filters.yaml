@@ -1,0 +1,14 @@
+extends: default_config.yaml
+
+scene_name: D06_bulb_bandpass_filters
+
+input:
+  file_path: './data/D06_bulb_bandpass_filters/D06_bulb_bandpass_filters.npz.zst'
+  end_idx: 1792
+
+output:
+  file_path: './output/D06_bulb_bandpass_filters/denoised_video.h5'
+  cache_dir: './output/D06_bulb_bandpass_filters/cache'
+
+temporal_transform:
+  num_levels: 6
