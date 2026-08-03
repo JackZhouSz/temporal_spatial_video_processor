@@ -64,3 +64,80 @@ class H5ArrayProxy:
 
     def __repr__(self) -> str:
         return f"H5ArrayProxy(shape={self.shape}, dtype={self.dtype})"
+
+
+class THWArrayProxy:
+    """Numpy-compatible view over an (T, H, W) dataset, presented as
+    (H, W, T, 1) to match the (H, W, T, [C]) convention the viewer expects
+    (e.g. for raw sensor captures stored frame-major on disk).
+    """
+
+    def __init__(self, dataset: h5py.Dataset) -> None:
+        self._ds = dataset
+
+    @property
+    def shape(self) -> tuple:
+        t, h, w = self._ds.shape
+        return (h, w, t, 1)
+
+    @property
+    def dtype(self) -> np.dtype:
+        return self._ds.dtype
+
+    @property
+    def ndim(self) -> int:
+        return 4
+
+    @property
+    def nbytes(self) -> int:
+        return int(np.prod(self._ds.shape)) * self._ds.dtype.itemsize
+
+    def __getitem__(self, idx):
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+        idx = tuple(idx) + (slice(None),) * (4 - len(idx))
+        h_idx, w_idx, t_idx, c_idx = idx
+
+        # Channel axis is a synthetic size-1 axis; only 0 / slice(None) make sense.
+        if isinstance(c_idx, (int, np.integer)):
+            if c_idx not in (0, -1):
+                raise IndexError(f"THWArrayProxy has a single channel, got index {c_idx}")
+            drop_channel = True
+        else:
+            drop_channel = False
+
+        # Fetch in the underlying (T, H, W) axis order, only reading the
+        # requested hyperslab (no full-array load).
+        result = np.asarray(self._ds[t_idx, h_idx, w_idx])
+
+        surviving = [label for label, i in zip('thw', (t_idx, h_idx, w_idx))
+                     if not isinstance(i, (int, np.integer))]
+        target = [label for label in 'hwt' if label in surviving]
+        perm = [surviving.index(label) for label in target]
+        if perm != list(range(len(perm))):
+            result = result.transpose(perm)
+
+        if not drop_channel:
+            result = result[..., None]
+        return result
+
+    def __array__(self, dtype=None):
+        arr = np.asarray(self._ds[:]).transpose(1, 2, 0)[..., None]
+        if dtype is not None:
+            arr = arr.astype(dtype)
+        return arr
+
+    def squeeze(self):
+        return np.asarray(self).squeeze()
+
+    def ravel(self):
+        return np.asarray(self).ravel()
+
+    def mean(self, axis=None):
+        return np.asarray(self).mean(axis=axis)
+
+    def copy(self):
+        return np.asarray(self).copy()
+
+    def __repr__(self) -> str:
+        return f"THWArrayProxy(shape={self.shape}, dtype={self.dtype})"

@@ -5,6 +5,10 @@ config file as run_tsvp.py, and loads whichever of input_video.h5,
 output.file_path (e.g. denoised_video.h5), and output.cache_dir/intermediates.h5
 currently exist. Does not run the pipeline itself.
 
+For viewing arbitrary .h5 files without a config, see viz/viewer_files.py
+(`python -m viz.viewer_files a.h5 b.h5 ...`), which reuses the
+create_viz_app_from_files() app factory below.
+
 Datasets are grouped for the UI's "add panel" dropdown by matching known names
 (or, for the per-level detail coefficient arrays, known prefixes) against the
 pipeline stage that produces them (_group_for_name() below) — this is purely a
@@ -109,6 +113,58 @@ def create_viz_app(config_path: str):
     step_labels = {g: _GROUP_LABELS[g] for g in step_order}
 
     state = PipelineState(config_path=str(config_path), config_dict=config)
+    state.STEP_ORDER = step_order
+    state.STEP_LABELS = step_labels
+    state.STEP_VARIABLES = groups
+    state.intermediates = intermediates
+    state._viz_h5_handles = handles  # keep refs alive
+
+    return _build_app(state)
+
+
+def create_viz_app_from_files(h5_paths):
+    """Build the viewer app from arbitrary pre-existing .h5 files, without a
+    pipeline config. Used by `viz/viewer_files.py`.
+
+    Each entry in *h5_paths* may be prefixed with "thw:" to mark a file whose
+    datasets are laid out (T, H, W) on disk (e.g. a raw sensor capture)
+    instead of the viewer's usual (H, W, T). Those are wrapped in
+    THWArrayProxy so they present as (H, W, T, 1) like every other dataset.
+    """
+    import h5py
+    from viz.routes import _build_app
+    from viz.h5store import H5ArrayProxy, THWArrayProxy
+    from viz.state import PipelineState
+
+    is_thw = []
+    clean_paths = []
+    for p in h5_paths:
+        thw = p.startswith('thw:')
+        clean_paths.append(p[len('thw:'):] if thw else p)
+        is_thw.append(thw)
+
+    # Keep file handles open for the server's lifetime so the proxy reads work.
+    handles = [h5py.File(p, 'r') for p in clean_paths]
+
+    intermediates: dict = {}
+    groups: dict = {}
+    for path, handle, thw in zip(clean_paths, handles, is_thw):
+        stem = Path(path).stem
+        for key in handle.keys():
+            name = key if key not in intermediates else f"{stem}__{key}"
+            dataset = handle[key]
+            intermediates[name] = THWArrayProxy(dataset) if (thw and dataset.ndim == 3) \
+                else H5ArrayProxy(dataset)
+            group_id, _ = _group_for_name(key)
+            groups.setdefault(group_id, []).append(name)
+
+    if not intermediates:
+        raise FileNotFoundError("No datasets found in: " + ", ".join(clean_paths))
+
+    step_order = [g for g in _GROUP_DISPLAY_ORDER if g in groups]
+    step_labels = {g: _GROUP_LABELS[g] for g in step_order}
+
+    state = PipelineState(config_path='', config_dict={})
     state.STEP_ORDER = step_order
     state.STEP_LABELS = step_labels
     state.STEP_VARIABLES = groups

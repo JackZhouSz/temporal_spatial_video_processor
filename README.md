@@ -141,6 +141,25 @@ viewer doesn't run or re-run pipeline steps, it just displays whatever's on disk
 By default the server binds to `localhost`. Pass `--bind` to listen on all
 interfaces — the viewer has no authentication, so only do this on a trusted network.
 
+**Viewing arbitrary `.h5` files (no config).** If you just want to inspect one or more
+`.h5` files directly — not necessarily produced by `run_tsvp.py` — use `viz.viewer_files`
+instead and list the files on the command line:
+
+```bash
+python -m viz.viewer_files input_video.h5 denoised_video.h5 intermediates.h5
+```
+
+All datasets across the listed files are loaded into one browser session, same as
+`viz.viewer`. Datasets are assumed to be laid out `(H, W, T)` on disk; prefix a path
+with `thw:` if that file's datasets are instead laid out `(T, H, W)` (e.g. a raw sensor
+capture):
+
+```bash
+python -m viz.viewer_files thw:raw_capture.h5 denoised_video.h5
+```
+
+`--bind` works the same way as with `viz.viewer`.
+
 ## Repo layout
 
 ```
@@ -149,6 +168,7 @@ src/                  Pipeline algorithm code (config loading, data loading, wav
 configs/              default_config.yaml (shared defaults) + scene_example.yaml (per-scene override)
 viz/                  Standalone read-only HDF5 viewer (FastAPI + browser UI), driven by the same config
   viewer.py             CLI entry point + config -> loaded-files logic (`python -m viz.viewer`)
+  viewer_files.py        CLI entry point for viewing arbitrary .h5 files, no config needed (`python -m viz.viewer_files`)
   routes.py             HTTP route/endpoint definitions
 ```
 
