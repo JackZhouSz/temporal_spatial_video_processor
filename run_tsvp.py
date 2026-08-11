@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-_N_WORKERS = os.cpu_count() or 1
+_N_WORKERS = os.cpu_count() // 2 or 1
 
 # DTCWT filter length used for the auto max-decomposition-level computation.
 _DTCWT_FILTER_LENGTH = 10
