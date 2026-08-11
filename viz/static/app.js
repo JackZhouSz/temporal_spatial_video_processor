@@ -9,8 +9,6 @@ let panelCounter = 0;
 let availableVariables = [];
 let globalFrame = 0;
 let grid = null;
-let commonOffset = null;         // ADU offset (subtracted before scaling)
-let commonScale  = null;         // ADU scale (divisor after offset)
 let compareSelectState = { step: 0, var1: null };  // for +Compare menu
 
 const PIXEL_COLORS = ['#4fc3f7','#ff7043','#66bb6a','#ffa726','#ab47bc','#ec407a','#26c6da','#d4e157'];
@@ -41,12 +39,6 @@ function showPixelCoordTooltip(clientX, clientY, row, col) {
 }
 function hidePixelCoordTooltip() {
   pixelCoordTooltip.style.display = 'none';
-}
-
-function unnorm(values, component) {
-  if (commonScale === null || !Array.isArray(values)) return values;
-  if (component === 'phase') return values;
-  return values.map(v => v * commonScale);
 }
 
 // ---- Toast ----
@@ -88,8 +80,6 @@ async function init() {
     const status = await apiJSON('/api/status');
     document.getElementById('scene-name').textContent  = status.scene_name  || '';
     document.getElementById('config-path').textContent = status.config_path || '';
-    commonOffset = status.common_offset ?? null;
-    commonScale  = status.common_scale  ?? null;
     STEP_ORDER_UI = status.steps.map(s => s.id);
     buildStepStrip(status.steps);
     await refreshVariables();
@@ -2324,10 +2314,9 @@ async function fetchAndUpdateVideoSlice(panelId) {
     } catch (e) { console.error('video spatial slice fetch error (var2)', e); }
   }
 
-  const scale = commonScale !== null ? commonScale : 1;
   const x = Array.from({length: data.length}, (_, i) => i);
   const xLabel = axis === 'row' ? 'col index' : 'row index';
-  const yLabel = commonScale !== null ? 'ADU (scaled)' : 'value';
+  const yLabel = 'value';
 
   const traces = [];
   const color = PIXEL_COLORS[0];
@@ -2336,18 +2325,18 @@ async function fetchAndUpdateVideoSlice(panelId) {
   const label = `${axis}=${data.index} frame=${data.frame}`;
 
   if (data.is_complex && p.pixelPlotMode === 'ri') {
-    traces.push({ x, y: data.real.map(v => v * scale),  name: `Re ${label}${v1suffix}`, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
-    traces.push({ x, y: data.imag.map(v => v * scale),  name: `Im ${label}${v1suffix}`, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
+    traces.push({ x, y: data.real,  name: `Re ${label}${v1suffix}`, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
+    traces.push({ x, y: data.imag,  name: `Im ${label}${v1suffix}`, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
     if (data2) {
       const x2 = Array.from({length: data2.length}, (_, i) => i);
-      traces.push({ x: x2, y: data2.real.map(v => v * scale),  name: `Re ${label}${v2suffix}`, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
-      traces.push({ x: x2, y: data2.imag.map(v => v * scale),  name: `Im ${label}${v2suffix}`, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
+      traces.push({ x: x2, y: data2.real,  name: `Re ${label}${v2suffix}`, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
+      traces.push({ x: x2, y: data2.imag,  name: `Im ${label}${v2suffix}`, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
     }
   } else {
-    traces.push({ x, y: data.magnitude.map(v => v * scale), name: label + v1suffix, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
+    traces.push({ x, y: data.magnitude, name: label + v1suffix, type: 'scatter', mode: 'lines', line: { color, width: 1 } });
     if (data2) {
       const x2 = Array.from({length: data2.length}, (_, i) => i);
-      traces.push({ x: x2, y: data2.magnitude.map(v => v * scale), name: label + v2suffix, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
+      traces.push({ x: x2, y: data2.magnitude, name: label + v2suffix, type: 'scatter', mode: 'lines', line: { color: PIXEL_COLORS[1], width: 1 } });
     }
   }
 
@@ -2410,7 +2399,7 @@ async function fetchAndUpdatePixelPlot(panelId) {
   const fullLen = allData[0].length;
   const xMax = (p.pixelPlotXMax != null) ? Math.min(p.pixelPlotXMax, fullLen) : fullLen;
   const x = Array.from({length: xMax}, (_, i) => i);
-  const yLabel = commonScale !== null ? 'ADU (scaled)' : 'value';
+  const yLabel = 'value';
 
   // Helper: clip array to xMax
   const clip = arr => arr ? arr.slice(0, xMax) : arr;
@@ -2432,24 +2421,24 @@ async function fetchAndUpdatePixelPlot(panelId) {
       const v2suffix = allData2 ? ` (${p.varName2})` : '';
 
       if (p.pixelPlotMode === 'ri') {
-        traces.push({ x, y: clip(unnorm(d.real,'real')),  name:`${label} Re${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x', yaxis:'y' });
-        traces.push({ x, y: clip(unnorm(d.imag,'imag')),  name:`${label} Im${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x2', yaxis:'y2' });
+        traces.push({ x, y: clip(d.real),  name:`${label} Re${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x', yaxis:'y' });
+        traces.push({ x, y: clip(d.imag),  name:`${label} Im${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x2', yaxis:'y2' });
         if (allData2) {
           const d2 = allData2[i];
           const x2len = (p.pixelPlotXMax != null) ? Math.min(p.pixelPlotXMax, d2.length) : d2.length;
           const x2 = Array.from({length:x2len},(_,j)=>j);
-          traces.push({ x:x2, y: clip(unnorm(d2.real,'real')),  name:`${label} Re${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x', yaxis:'y' });
-          traces.push({ x:x2, y: clip(unnorm(d2.imag,'imag')),  name:`${label} Im${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x2', yaxis:'y2' });
+          traces.push({ x:x2, y: clip(d2.real),  name:`${label} Re${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x', yaxis:'y' });
+          traces.push({ x:x2, y: clip(d2.imag),  name:`${label} Im${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x2', yaxis:'y2' });
         }
       } else {
-        traces.push({ x, y: clip(unnorm(d.magnitude,'magnitude')), name:`${label} |z|${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x', yaxis:'y' });
-        traces.push({ x, y: clip(unnorm(d.phase,'phase')),         name:`${label} ∠${v1suffix}`,   type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x2', yaxis:'y2' });
+        traces.push({ x, y: clip(d.magnitude), name:`${label} |z|${v1suffix}`, type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x', yaxis:'y' });
+        traces.push({ x, y: clip(d.phase),     name:`${label} ∠${v1suffix}`,   type:'scatter', mode:'lines', line:line1, opacity:line1opacity, xaxis:'x2', yaxis:'y2' });
         if (allData2) {
           const d2 = allData2[i];
           const x2len = (p.pixelPlotXMax != null) ? Math.min(p.pixelPlotXMax, d2.length) : d2.length;
           const x2 = Array.from({length:x2len},(_,j)=>j);
-          traces.push({ x:x2, y: clip(unnorm(d2.magnitude,'magnitude')), name:`${label} |z|${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x', yaxis:'y' });
-          traces.push({ x:x2, y: clip(unnorm(d2.phase,'phase')),         name:`${label} ∠${v2suffix}`,   type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x2', yaxis:'y2' });
+          traces.push({ x:x2, y: clip(d2.magnitude), name:`${label} |z|${v2suffix}`, type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x', yaxis:'y' });
+          traces.push({ x:x2, y: clip(d2.phase),     name:`${label} ∠${v2suffix}`,   type:'scatter', mode:'lines', line:{color, width:1}, xaxis:'x2', yaxis:'y2' });
         }
       }
     }
@@ -2485,11 +2474,11 @@ async function fetchAndUpdatePixelPlot(panelId) {
       const label = `${d.row},${d.col}`;
       const v1suffix = allData2 ? ` (${p.varName})` : '';
       const v2suffix = allData2 ? ` (${p.varName2})` : '';
-      traces.push({ x, y: clip(unnorm(d.magnitude,'magnitude')), name: label + v1suffix, type:'scatter', mode:'lines', line:line1, opacity:line1opacity });
+      traces.push({ x, y: clip(d.magnitude), name: label + v1suffix, type:'scatter', mode:'lines', line:line1, opacity:line1opacity });
       if (allData2) {
         const d2 = allData2[i];
         const x2len = (p.pixelPlotXMax != null) ? Math.min(p.pixelPlotXMax, d2.length) : d2.length;
-        traces.push({ x: Array.from({length:x2len},(_,j)=>j), y: clip(unnorm(d2.magnitude,'magnitude')), name: label + v2suffix, type:'scatter', mode:'lines', line:{color, width:1} });
+        traces.push({ x: Array.from({length:x2len},(_,j)=>j), y: clip(d2.magnitude), name: label + v2suffix, type:'scatter', mode:'lines', line:{color, width:1} });
       }
     }
     const layout = {
@@ -2627,10 +2616,9 @@ async function fetchAndUpdateHeatmapSlice(panelId) {
     } catch (e) { console.error('heatmap slice error (var2)', e); }
   }
 
-  const scale = commonScale !== null ? commonScale : 1;
-  const y1vals = data.values.map(v => v * scale);
+  const y1vals = data.values;
   const x1 = Array.from({length: y1vals.length}, (_, i) => i);
-  const yLabel = commonScale !== null ? 'ADU (scaled)' : 'value';
+  const yLabel = 'value';
   const xLabel = p.sliceAxis === 'row' ? 'col index' : 'row index';
 
   const traces = [
@@ -2639,7 +2627,7 @@ async function fetchAndUpdateHeatmapSlice(panelId) {
       line: { color: PIXEL_COLORS[0], width: 1 } },
   ];
   if (data2) {
-    const y2vals = data2.values.map(v => v * scale);
+    const y2vals = data2.values;
     const x2 = Array.from({length: y2vals.length}, (_, i) => i);
     traces.push({ x: x2, y: y2vals, type: 'scatter', mode: 'lines',
       name: p.varName2, line: { color: PIXEL_COLORS[1], width: 1 } });

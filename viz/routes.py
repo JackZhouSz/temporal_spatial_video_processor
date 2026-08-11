@@ -37,6 +37,36 @@ from viz.state import PipelineState
 # Key: (var_name, pmin, pmax, component). Cleared when intermediates change.
 _global_stats_cache: dict = {}
 
+# input_baseline/denoised_baseline are already written in raw ADU units (see
+# run_tsvp.py) — rescaling them again here would double-apply common_scale/offset.
+_ALREADY_ADU_UNITS = {'input_baseline', 'denoised_baseline'}
+
+
+def _adu_rescale(name: str, values: list, config_dict: dict) -> list:
+    """Rescale a flat list of values to raw ADU units, unless `name` is already in ADU units.
+
+    Mirrors the inverse of the pre_transform applied in run_tsvp.py:
+    raw_ADU = value * common_scale + common_offset.
+    """
+    if name in _ALREADY_ADU_UNITS:
+        return values
+    pre_cfg = config_dict.get('pre_transform', {})
+    common_offset = float(pre_cfg.get('common_offset', 0.0))
+    common_scale = float(pre_cfg.get('common_scale', 1.0))
+    return [v * common_scale + common_offset for v in values]
+
+
+def _adu_rescale_result(name: str, result: dict, config_dict: dict) -> dict:
+    """Rescale the numeric-series fields of a renderer result dict to raw ADU units.
+
+    Applies to 'values', 'magnitude', 'real', 'imag' when present; 'phase' is left
+    untouched since it isn't a linear function of the underlying ADU value.
+    """
+    for key in ('values', 'magnitude', 'real', 'imag'):
+        if key in result:
+            result[key] = _adu_rescale(name, result[key], config_dict)
+    return result
+
 
 # ---------------------------------------------------------------------------
 # App factory
@@ -605,10 +635,6 @@ def _build_app(state: PipelineState) -> FastAPI:
         return Response(content=rgba1 + rgba2, media_type='application/octet-stream',
                         headers=headers)
 
-    # input_baseline/denoised_baseline are already written in raw ADU units (see
-    # run_tsvp.py) — rescaling them again here would double-apply common_scale/offset.
-    _ALREADY_ADU_UNITS = {'input_baseline', 'denoised_baseline'}
-
     @app.get("/api/variable/{name}/series-json")
     async def var_series(name: str):
         arr = state.intermediates.get(name)
@@ -620,13 +646,7 @@ def _build_app(state: PipelineState) -> FastAPI:
             imag_flat = a.imag.ravel().tolist()
             return {'values': real_flat, 'imag_values': imag_flat,
                     'length': len(real_flat), 'name': name, 'is_complex': True}
-        if name in _ALREADY_ADU_UNITS:
-            flat = a.ravel().tolist()
-        else:
-            pre_cfg = state.config_dict.get('pre_transform', {})
-            common_offset = float(pre_cfg.get('common_offset', 0.0))
-            common_scale = float(pre_cfg.get('common_scale', 1.0))
-            flat = (a.ravel() * common_scale + common_offset).tolist()
+        flat = _adu_rescale(name, a.ravel().tolist(), state.config_dict)
         return {'values': flat, 'length': len(flat), 'name': name}
 
     @app.get("/api/variable/{name}/barchart-json")
@@ -647,7 +667,7 @@ def _build_app(state: PipelineState) -> FastAPI:
         if arr is None or not hasattr(arr, 'shape'):
             raise HTTPException(404, f"Variable '{name}' not found")
         try:
-            return extract_heatmap_slice(arr, axis, index, component)
+            return _adu_rescale_result(name, extract_heatmap_slice(arr, axis, index, component), state.config_dict)
         except ValueError as e:
             raise HTTPException(422, str(e))
 
@@ -658,7 +678,8 @@ def _build_app(state: PipelineState) -> FastAPI:
         if arr is None or not hasattr(arr, 'shape'):
             raise HTTPException(404, f"Variable '{name}' not found or not an array")
         try:
-            return extract_video_spatial_slice(arr, axis, index, frame, component)
+            result = extract_video_spatial_slice(arr, axis, index, frame, component)
+            return _adu_rescale_result(name, result, state.config_dict)
         except ValueError as e:
             raise HTTPException(422, str(e))
 
@@ -670,7 +691,8 @@ def _build_app(state: PipelineState) -> FastAPI:
         # Use the pixel-chunked companion dataset if available to avoid reading
         # every frame chunk just to extract a single pixel's time series.
         pixel_arr = state.intermediates.get(f"{name}_pixel")
-        return extract_pixel_series(pixel_arr if pixel_arr is not None else arr, row, col)
+        result = extract_pixel_series(pixel_arr if pixel_arr is not None else arr, row, col)
+        return _adu_rescale_result(name, result, state.config_dict)
 
     @app.get("/api/variable/{name}/frame-npy")
     async def var_frame_npy(
